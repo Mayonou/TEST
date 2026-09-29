@@ -1,1 +1,1095 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mahé Richard-Schmidt — Monteur Vidéo</title>
+  <link rel="preconnect" href="https://www.youtube.com"/>
+  <link rel="preconnect" href="https://i.ytimg.com"/>
+  <link rel="dns-prefetch" href="https://www.youtube.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400&family=Outfit:wght@100;200&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a09; --white: #f0ede8; --muted: #55554f;
+      --accent: #c8b89a; --line: #1e1e1c;
+    }
+    html { scroll-behavior: auto; }
+    body {
+      background: var(--bg); color: var(--white);
+      font-family: 'DM Mono', monospace; cursor: none;
+      overflow: hidden;
+    }
+
+    /* ── Cursor ── */
+    #cursor {
+      position: fixed; z-index: 9999; pointer-events: none;
+      mix-blend-mode: difference; left: -80px; top: -80px;
+      transform: translate(-50%, -50%); width: 36px; height: 36px;
+    }
+    #cursor::before, #cursor::after {
+      content: ""; position: absolute; top: 50%; left: 50%;
+      width: 32px; height: 2px; background: rgba(255,255,255,0.95);
+      transform-origin: center;
+    }
+    #cursor::before { transform: translate(-50%, -50%) rotate(45deg); }
+    #cursor::after  { transform: translate(-50%, -50%) rotate(-45deg); }
+
+    /* ── Header ── */
+    #hdr {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 48px; height: 64px;
+      border-bottom: 1px solid var(--line); background: var(--bg);
+    }
+    .hdr-name {
+      font-family: 'Outfit', sans-serif; font-weight: 100;
+      font-size: .75rem; letter-spacing: .2em; text-transform: uppercase; color: var(--accent);
+    }
+    .hdr-role { font-size: .56rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+    .hdr-contact { font-size: .58rem; letter-spacing: .08em; color: var(--muted); text-align: right; line-height: 2; }
+    .hdr-contact a { color: inherit; text-decoration: none; transition: color .2s; cursor: none; }
+    .hdr-contact a:hover { color: var(--white); }
+
+    /* ── Nom flottant SVG ── */
+    #name-wrap {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 5; overflow: hidden; overflow: clip;
+    }
+    #name-svg {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      mix-blend-mode: difference;
+      overflow: visible;
+      pointer-events: none;   /* l'overlay du nom ne capte jamais les événements */
+    }
+    #name-svg * { pointer-events: none; }
+    /* Remplissage semi-transparent */
+    .name-svg-base {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(48px, 7vw, 110px);
+      letter-spacing: .05em;
+      fill: #ffffff;
+      opacity: .38;
+    }
+    /* Contour noir permanent */
+    .name-svg-stroke {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(48px, 7vw, 110px);
+      letter-spacing: .05em;
+      fill: none;
+      stroke: #000000;
+      stroke-width: 1px;
+      opacity: .8;
+    }
+    /* Lumière blanche — animée en JS, sans pause */
+    .name-svg-light {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(48px, 7vw, 110px);
+      letter-spacing: .05em;
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 2.5px;
+      stroke-linecap: round;
+      stroke-dasharray: 55 99999;
+      stroke-dashoffset: 0;
+      opacity: .95;
+    }
+    /* Filtre lueur */
+    #name-svg-glow { overflow: visible; }
+
+    /* ── Scroll area — viewport fixe, défilement virtuel par transform ── */
+    #scroll-area {
+      padding-top: 64px;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;          /* repli vieux navigateurs */
+      overflow: clip;            /* découpe sans créer de conteneur défilable */
+      position: relative;
+      touch-action: none;        /* on gère le geste tactile en JS */
+      overscroll-behavior: none;
+    }
+    #scroll-track {
+      will-change: transform;
+      transform: translate3d(0, 0, 0);
+      backface-visibility: hidden;
+    }
+
+    /* ── Strip projet ── */
+    .project {
+      position: relative; width: 100%; aspect-ratio: 32 / 9;
+      /* clip, pas hidden : sinon chaque tuile devient un conteneur de défilement
+         qui « avale » la molette sur Safari (scroll mort au-dessus des tuiles). */
+      overflow: hidden;          /* repli vieux navigateurs */
+      overflow: clip;
+      cursor: none; border-bottom: 1px solid var(--line);
+      transition: aspect-ratio .6s cubic-bezier(.23,1,.32,1);
+    }
+    .project:first-child { border-top: 1px solid var(--line); }
+    /* L'agrandissement est piloté par .expand (synchronisé sur TOUTES les copies
+       d'un même projet) et non par :hover, afin que tous les blocs gardent une
+       hauteur identique — condition de l'enroulement sans saut. */
+    .project.expand { aspect-ratio: 32 / 13; }
+    .project.highlighted .project-overlay { opacity: .35 !important; }
+    .project.highlighted .project-title   { opacity: 1 !important; transform: translateY(0) !important; }
+
+    /* iframe cover */
+    .project-iframe-wrap { position: absolute; inset: 0; z-index: 1; overflow: hidden; overflow: clip; }
+    /* iOS Safari : supprime le gros bouton « play » que Safari dessine sur une
+       vidéo pas encore lancée (limite de décodage simultané). On voit alors
+       l'image au lieu du bouton. */
+    .project-iframe-wrap video::-webkit-media-controls,
+    .project-iframe-wrap video::-webkit-media-controls-panel,
+    .project-iframe-wrap video::-webkit-media-controls-play-button,
+    .project-iframe-wrap video::-webkit-media-controls-start-playback-button {
+      display: none !important;
+      -webkit-appearance: none !important;
+      opacity: 0 !important;
+    }
+    .project-iframe-wrap iframe {
+      position: absolute; top: 50%; left: 50%;
+      width: 100%; height: 200%; transform: translate(-50%, -50%);
+      border: none; display: block; pointer-events: none;
+    }
+
+    /* overlay gradient */
+    .project-overlay {
+      position: absolute; inset: 0; z-index: 2;
+      background: linear-gradient(to right,
+        rgba(10,10,9,.75) 0%, rgba(10,10,9,.1) 35%,
+        rgba(10,10,9,.1) 65%, rgba(10,10,9,.5) 100%);
+      transition: opacity .6s ease;
+    }
+    .project:hover .project-overlay { opacity: .7; }
+
+    /* capture layer */
+    .project-capture { position: absolute; inset: 0; z-index: 3; cursor: none; }
+
+    /* numéro */
+    .project-num {
+      position: absolute; top: 18px; left: 48px; z-index: 4;
+      font-size: .54rem; letter-spacing: .14em; color: var(--muted);
+      opacity: 0; transition: opacity .3s ease;
+    }
+    .project:hover .project-num { opacity: 1; }
+
+    /* CTA */
+    .project-cta {
+      position: absolute; top: 18px; right: 48px; z-index: 4;
+      font-size: .56rem; letter-spacing: .18em; text-transform: uppercase;
+      color: var(--white); opacity: 0; transform: translateX(6px);
+      transition: opacity .3s ease .08s, transform .3s ease .08s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .project-cta::after { content: '→'; font-size: .9rem; }
+    .project:hover .project-cta { opacity: .7; transform: translateX(0); }
+
+    /* ── Info projet — visible au hover uniquement ── */
+    .project-info {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 4;
+      display: flex; align-items: flex-end; justify-content: space-between;
+      padding: 20px 48px;
+    }
+    .project-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(1.4rem, 3vw, 2.8rem); letter-spacing: .06em;
+      color: #ffffff; line-height: 1;
+      mix-blend-mode: difference;
+      text-shadow:
+        -1px -1px 0 rgba(0,0,0,0.9),
+         1px -1px 0 rgba(0,0,0,0.9),
+        -1px  1px 0 rgba(0,0,0,0.9),
+         1px  1px 0 rgba(0,0,0,0.9);
+      opacity: 0; transform: translateY(6px);
+      transition: opacity .4s ease, transform .4s ease;
+    }
+    .project:hover .project-title { opacity: .40; transform: translateY(0); }
+    .project-meta {
+      font-size: .6rem; letter-spacing: .12em; text-transform: uppercase;
+      color: #ffffff; text-align: right; line-height: 2;
+      mix-blend-mode: difference;
+      text-shadow:
+        -1px -1px 0 rgba(0,0,0,0.9),
+         1px -1px 0 rgba(0,0,0,0.9),
+        -1px  1px 0 rgba(0,0,0,0.9),
+         1px  1px 0 rgba(0,0,0,0.9);
+      opacity: 0; transform: translateY(6px);
+      transition: opacity .4s ease .05s, transform .4s ease .05s;
+    }
+    .project:hover .project-meta { opacity: .40; transform: translateY(0); }
+
+    /* ── Vue projet plein écran ── */
+    #project-view {
+      position: fixed; inset: 0; z-index: 500; background: var(--bg);
+      display: flex; flex-direction: column; opacity: 0; pointer-events: none;
+      transition: opacity .4s cubic-bezier(.23,1,.32,1);
+    }
+    #project-view.open { opacity: 1; pointer-events: all; }
+    /* Vue projet fermée : on retire l'iframe du DOM visuel. Un iframe, même avec
+       un ancêtre en pointer-events:none, « avale » les événements wheel sur
+       Safari (Chrome les laisse passer) — ce qui bloquait le défilement au-dessus
+       de la zone centrale. display:none le rend totalement transparent. */
+    #project-view:not(.open) #pv-iframe { display: none; }
+    #pv-topbar {
+      height: 64px; flex-shrink: 0; position: relative;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 48px; border-bottom: 1px solid var(--line);
+    }
+    #pv-back {
+      display: flex; align-items: center; gap: 12px;
+      font-size: .6rem; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--muted); background: none; border: none; cursor: none;
+      transition: color .2s; font-family: 'DM Mono', monospace;
+    }
+    #pv-back:hover { color: var(--white); }
+    #pv-back::before { content: '←'; font-size: 1rem; }
+    #pv-title {
+      font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: .08em;
+      position: absolute; left: 50%; transform: translateX(-50%);
+    }
+    #pv-meta { font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: right; line-height: 2; }
+    #pv-video { flex: 1; position: relative; }
+    #pv-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+    #pv-capture { position: absolute; inset: 0; z-index: 2; cursor: none; pointer-events: none; }
+    #pv-bottombar {
+      height: 52px; flex-shrink: 0; display: flex; align-items: center;
+      justify-content: space-between; padding: 0 48px; border-top: 1px solid var(--line);
+    }
+    .pv-label { font-size: .56rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+    #pv-nav { display: flex; gap: 32px; }
+    .pv-nav-btn {
+      font-size: .58rem; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--muted); background: none; border: none; cursor: none;
+      transition: color .2s; font-family: 'DM Mono', monospace; display: flex; align-items: center; gap: 8px;
+    }
+    .pv-nav-btn:hover { color: var(--white); }
+    .pv-nav-btn.prev::before { content: '←'; }
+    .pv-nav-btn.next::after  { content: '→'; }
+
+    /* ── Loading overlay ── */
+    #loading {
+      position: fixed; inset: 0; z-index: 9000;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .6s ease;
+    }
+    #loading.hidden { opacity: 0; pointer-events: none; }
+    .loading-bar {
+      width: 120px; height: 1px; background: var(--line); overflow: hidden;
+    }
+    .loading-fill {
+      height: 100%; background: var(--accent);
+      width: 0%; transition: width .3s ease;
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading"><div class="loading-bar"><div class="loading-fill" id="loading-fill"></div></div></div>
+<div id="cursor"></div>
+
+<header id="hdr">
+  <div>
+    <div class="hdr-name">Mahé Richard-Schmidt</div>
+    <div class="hdr-role">Monteur vidéo</div>
+  </div>
+  <div class="hdr-contact">
+    <a href="mailto:maherichardschmidt@gmail.com">maherichardschmidt@gmail.com</a><br>
+    <a href="tel:+33671451971">+33 6 71 45 19 71</a>
+  </div>
+</header>
+
+<div id="name-wrap">
+  <svg id="name-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="2.5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <!-- Groupes injectés par JS pour la boucle infinie de scroll -->
+  </svg>
+</div>
+
+<div id="scroll-area">
+  <div id="scroll-track">
+    <div id="projects-inner"></div>
+    <div id="projects-clone"></div>
+  </div>
+</div>
+
+<div id="project-view">
+  <div id="pv-topbar">
+    <button id="pv-back">Retour</button>
+    <div id="pv-title"></div>
+    <div id="pv-meta"></div>
+  </div>
+  <div id="pv-video">
+    <iframe id="pv-iframe" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+    <div id="pv-capture"></div>
+  </div>
+  <div id="pv-bottombar">
+    <div class="pv-label">Mahé Richard-Schmidt — Monteur Vidéo</div>
+    <div id="pv-nav"></div>
+  </div>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  TES PROJETS — modifie uniquement ce tableau
+//  start / end : secondes (0:05 = 5, 1:22 = 82)
+// ═══════════════════════════════════════════════════════════════
+const projects = [
+  { id:"pouf",               title:"POUF",                     real:"Mahé RICHARD-SCHMIDT", year:"2025", youtubeId:"XYP9Ufletss",  clip:"Extrait_POUF.mp4"       },
+  { id:"neoma",              title:"Neoma",                    real:"Nicolas ROMIEU",        year:"2023", youtubeId:"I80fSVbp-eE",  clip:"Extrait_NEOMA.mp4"      },
+  { id:"garage-lmr",         title:"Garage LMR",               real:"Nicolas ROMIEU",        year:"2023", youtubeId:"muCyrhqdBwA",  clip:"Extrait_LMR.mp4"        },
+  { id:"renee-costes",       title:"Renée Costes",             real:"Nicolas ROMIEU",        year:"2023", youtubeId:"XqMseG4eQ9o",  clip:"Extrait_COSTES.mp4"     },
+  { id:"talome",             title:"Talome",                   real:"",                      year:"2026", youtubeId:"J8HP0uNc9hQ",  clip:"TALOME  Léo Orta - website.mp4"     },
+  { id:"albert-koski",       title:"Albert Koski",             real:"Nicolas ROMIEU",        year:"2022", youtubeId:"XTDjJ9pvYJI",  clip:"Extrait_KOSKI.mp4"      },
+  { id:"luke-anger",         title:"Luke Anger — Continuum",   real:"Nicolas ROMIEU",        year:"2023", youtubeId:"nUmqWk7Q4no",  clip:"Extrait_CONTINUUM.mp4"  },
+  { id:"centaines-de-roses", title:"Murphy × Frank Takuma",    real:"Léo VIEIRA",            year:"2024", youtubeId:"Nog0dxvLhQY",  clip:"Extrait_ROSES.mp4"      },
+];
+// ═══════════════════════════════════════════════════════════════
+
+const N             = projects.length;
+const scrollArea    = document.getElementById('scroll-area');
+const scrollTrack   = document.getElementById('scroll-track');
+const projectsInner = document.getElementById('projects-inner');
+const projectsClone = document.getElementById('projects-clone');
+const pvView        = document.getElementById('project-view');
+const pvTitle       = document.getElementById('pv-title');
+const pvMeta        = document.getElementById('pv-meta');
+const pvIframe      = document.getElementById('pv-iframe');
+const pvNav         = document.getElementById('pv-nav');
+const pvBack        = document.getElementById('pv-back');
+// name1/name2 remplacés par groupes SVG (voir initNameSVG)
+const cursor        = document.getElementById('cursor');
+const ytPlayers     = [];
+
+// ── Point d'entrée ──
+// IMPORTANT : l'app ne dépend PAS de l'API YouTube. Toutes les tuiles sont des
+// MP4 locaux ; lier l'init au chargement de youtube.com/iframe_api cassait tout
+// quand ce script est bloqué/lent (Safari ITP, bloqueurs de contenu) → page
+// figée, aucun défilement. On initialise donc dès que le DOM est prêt.
+let _appStarted = false;
+function initApp() {
+  if (_appStarted) return;   // garde contre une double initialisation
+  _appStarted = true;
+  buildStrips();
+  setupInfiniteScroll();
+  observeVideos();
+  startIdleEffects();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
+
+// L'API YouTube reste optionnelle (seulement utile pour d'éventuels projets
+// sans clip local). Si elle se charge, elle ne fait que ré-appeler initApp,
+// qui est neutralisé par le garde ci-dessus.
+window.onYouTubeIframeAPIReady = initApp;
+
+// ── Construction des strips ──
+function buildStrips() {
+  projects.forEach((p, i) => {
+    const strip = document.createElement('div');
+    strip.className = 'project';
+    strip.dataset.idx = i;
+
+    const iframeWrap = document.createElement('div');
+    iframeWrap.className = 'project-iframe-wrap';
+
+    if (p.clip) {
+      // Vidéo locale mp4 — boucle native, pas de logo pause
+      const vid = document.createElement('video');
+      vid.src        = p.clip;
+      vid.autoplay   = true;
+      vid.muted      = true;
+      vid.loop       = true;
+      vid.playsInline = true;
+      vid.preload    = 'auto';
+      // Safari n'autorise l'autoplay que si « muted » est un ATTRIBUT (pas
+      // seulement la propriété JS) ; idem pour la lecture inline.
+      vid.setAttribute('muted', '');
+      vid.setAttribute('playsinline', '');
+      vid.setAttribute('webkit-playsinline', '');
+      trackPaint(vid);
+      vid.style.cssText = `
+        position:absolute; top:50%; left:50%;
+        width:100%; height:100%;
+        object-fit:cover;
+        transform:translate(-50%,-50%);
+        pointer-events:none;
+      `;
+      iframeWrap.appendChild(vid);
+    } else {
+      // Fallback YouTube si pas de mp4 local
+      const placeholder = document.createElement('div');
+      placeholder.id = `yt-${i}`;
+      iframeWrap.appendChild(placeholder);
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'project-overlay';
+
+    const capture = document.createElement('div');
+    capture.className = 'project-capture';
+
+    const num = document.createElement('div');
+    num.className = 'project-num';
+    num.textContent = String(i + 1).padStart(2, '0');
+
+    const cta = document.createElement('div');
+    cta.className = 'project-cta';
+    cta.textContent = 'Voir le projet';
+
+    const info = document.createElement('div');
+    info.className = 'project-info';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'project-title';
+    titleEl.textContent = p.title;
+
+    const meta = document.createElement('div');
+    meta.className = 'project-meta';
+    if (p.real) meta.innerHTML = `Réal. ${p.real}<br>${p.year}`;
+    else meta.textContent = p.year;
+
+    info.appendChild(titleEl);
+    info.appendChild(meta);
+
+    strip.appendChild(iframeWrap);
+    strip.appendChild(overlay);
+    strip.appendChild(capture);
+    strip.appendChild(num);
+    strip.appendChild(cta);
+    strip.appendChild(info);
+
+    capture.addEventListener('click', () => clickOpen(i));
+    projectsInner.appendChild(strip);
+
+    // Player YouTube uniquement si pas de mp4 local ET si l'API est dispo
+    if (!p.clip) {
+    const initDelay = i < 3 ? 0 : i * 300;
+    setTimeout(() => {
+      if (!(window.YT && window.YT.Player)) return; // API absente : on n'essaie pas
+      const player = new YT.Player(`yt-${i}`, {
+        videoId: p.youtubeId,
+        playerVars: {
+          autoplay: 1, mute: 1, controls: 0, modestbranding: 1,
+          rel: 0, disablekb: 1, loop: 0, start: p.start, end: p.end, playsinline: 1,
+          iv_load_policy: 3, fs: 0, suggestedQuality: "small",
+        },
+        events: {
+          onReady(e) {
+            e.target.playVideo();
+            const iframe = iframeWrap.querySelector('iframe');
+            if (iframe) iframe.style.cssText = `
+              position:absolute; top:50%; left:50%;
+              width:100%; height:200%;
+              transform:translate(-50%,-50%);
+              border:none; pointer-events:none;
+            `;
+          },
+          onStateChange(e) {
+            if (e.data === YT.PlayerState.ENDED || e.data === 0) {
+              e.target.seekTo(p.start, true);
+              e.target.playVideo();
+            }
+            if (e.data === YT.PlayerState.PAUSED) {
+              // Relance immédiatement sans délai pour minimiser le flash pause
+              e.target.playVideo();
+            }
+          },
+          onError() {
+            // En cas d'erreur, tente de relancer
+            e.target.seekTo(p.start, true);
+            e.target.playVideo();
+          },
+        },
+      });
+      ytPlayers.push(player);
+    }, initDelay);
+    } // fin if(!p.clip)
+  });
+
+  // ── Loading tracker ──
+  // On ne masque l'écran de chargement qu'une fois que CHAQUE vidéo a
+  // réellement peint une image à l'écran. canplaythrough garantit le buffer,
+  // mais PAS qu'une frame soit décodée et affichée — d'où des tuiles noires.
+  // requestVideoFrameCallback ne se déclenche qu'à la présentation d'une vraie
+  // image : c'est le seul signal qui garantit « la vidéo n'est pas blanche ».
+  const loadingEl   = document.getElementById('loading');
+  const loadingFill = document.getElementById('loading-fill');
+  const allVids     = Array.from(projectsInner.querySelectorAll('video'));
+  const readySet    = new Set();
+
+  // Masque l'overlay des tuiles puis lance l'animation lumineuse du nom MAHÉ
+  // (elle ne démarre qu'une fois les tuiles apparues).
+  const hideLoading = () => {
+    loadingEl.classList.add('hidden');
+    startLight();
+  };
+
+  function markReady(vid) {
+    if (readySet.has(vid)) return;       // évite le double comptage
+    readySet.add(vid);
+    loadingFill.style.width = (readySet.size / allVids.length * 100) + '%';
+    if (readySet.size >= allVids.length) {
+      setTimeout(hideLoading, 250);
+    }
+  }
+
+  // Confirme qu'une vraie image a été affichée pour cette vidéo
+  function whenFramePainted(vid) {
+    if ('requestVideoFrameCallback' in vid) {
+      vid.requestVideoFrameCallback(() => markReady(vid));
+    } else {
+      // Navigateurs sans rVFC : on se rabat sur canplaythrough + un court délai
+      // pour laisser le temps au premier rendu.
+      const fallback = () => setTimeout(() => markReady(vid), 300);
+      if (vid.readyState >= 4) fallback();
+      else vid.addEventListener('canplaythrough', fallback, { once: true });
+    }
+  }
+
+  allVids.forEach(vid => {
+    // S'assure que la lecture démarre (nécessaire pour produire une frame)
+    const kick = () => vid.play().catch(() => {});
+    if (vid.readyState >= 2) kick();
+    else vid.addEventListener('loadeddata', kick, { once: true });
+
+    whenFramePainted(vid);
+
+    // En cas d'erreur (404, décodage), on n'attend pas indéfiniment
+    vid.addEventListener('error', () => markReady(vid), { once: true });
+  });
+
+  // FILET DE SÉCURITÉ GLOBAL : quoi qu'il arrive, on retire l'overlay après 7 s.
+  // Indispensable : si une vidéo ne signale jamais sa première image (ex.
+  // autoplay bloqué sur Safari), l'overlay resterait affiché et bloquerait
+  // tout défilement, donnant l'impression que le scroll ne marche pas.
+  setTimeout(hideLoading, 7000);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── DÉFILEMENT INFINI — moteur virtuel par transform ──
+// On n'utilise PAS le scroll natif : il est impossible de reboucler
+// sans à-coups sur mobile (repositionner scrollTop pendant l'inertie
+// iOS provoque saccades/blocages). À la place on déplace une piste via
+// translate3d et on enroule la position avec un modulo : aucune limite
+// de scroll, aucune couture visible, inertie 100 % maîtrisée.
+// ══════════════════════════════════════════════════════════════════
+const VS = {
+  pos: 0,            // position virtuelle (px), croissante, jamais bornée
+  vel: 0,            // vitesse (px/s) pour l'inertie
+  C: 1,              // hauteur d'un bloc de contenu (1 jeu de projets)
+  dragging: false,
+  auto: null,        // animation d'auto-scroll idle {from,to,dur,t0}
+};
+
+// Construit un bloc-copie (clone de tous les strips) prêt à jouer
+function buildCopyBlock() {
+  const block = document.createElement('div');
+  projectsInner.querySelectorAll('.project').forEach(strip => {
+    const clone   = strip.cloneNode(true);
+    const origIdx = parseInt(strip.dataset.idx);
+    clone.querySelector('.project-capture')
+         .addEventListener('click', () => clickOpen(origIdx));
+    primeVideo(clone.querySelector('video'));
+    block.appendChild(clone);
+  });
+  return block;
+}
+
+// Garantit qu'une vidéo joue en continu, sans contrôle ni bouton play
+function primeVideo(vid) {
+  if (!vid) return;
+  vid.muted = true; vid.loop = true; vid.autoplay = true;
+  vid.playsInline = true; vid.controls = false;
+  vid.setAttribute('muted', '');            // attribut requis par Safari (autoplay)
+  vid.setAttribute('webkit-playsinline', '');
+  vid.setAttribute('playsinline', '');
+  vid.disablePictureInPicture = true;
+  trackPaint(vid);
+  vid.play().catch(() => {});
+}
+
+// Mémorise quelles vidéos ont déjà affiché au moins une image.
+// On ne mettra JAMAIS en pause une vidéo non encore peinte : sinon elle
+// montrerait la couleur de fond (tuile « vide ») au lieu d'une image figée.
+const _painted = new WeakSet();
+function trackPaint(vid) {
+  if (!vid) return;
+  if ('requestVideoFrameCallback' in vid) {
+    vid.requestVideoFrameCallback(() => _painted.add(vid));
+  } else if (vid.readyState >= 2) {
+    _painted.add(vid);
+  } else {
+    vid.addEventListener('loadeddata', () => _painted.add(vid), { once: true });
+  }
+}
+
+function setupInfiniteScroll() {
+  // 1er bloc-clone : on réutilise #projects-clone existant
+  projectsInner.querySelectorAll('.project').forEach(strip => {
+    const clone   = strip.cloneNode(true);
+    const origIdx = parseInt(strip.dataset.idx);
+    clone.querySelector('.project-capture')
+         .addEventListener('click', () => clickOpen(origIdx));
+    primeVideo(clone.querySelector('video'));
+    projectsClone.appendChild(clone);
+  });
+
+  // Ajoute autant de blocs-copies que nécessaire pour que la piste
+  // remplisse toujours l'écran pendant l'enroulement (≥ viewport + 1 bloc).
+  function ensureCopies() {
+    VS.C = projectsInner.offsetHeight || 1;
+    const needed = Math.ceil(window.innerHeight / VS.C) + 1; // blocs au total
+    // blocs présents = projectsInner + projectsClone + extras déjà ajoutés
+    let present = 2 + scrollTrack.querySelectorAll('.copy-block').length;
+    while (present < needed) {
+      const b = buildCopyBlock();
+      b.className = 'copy-block';
+      scrollTrack.appendChild(b);
+      present++;
+    }
+  }
+  ensureCopies();
+
+  // VS.C suit la hauteur réelle d'un bloc. C'est sûr car l'agrandissement au
+  // survol est synchronisé sur toutes les copies (classe .expand) : les blocs
+  // restent toujours de hauteur identique, donc l'enroulement modulo reste
+  // exact à chaque instant, même pendant la transition d'agrandissement.
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(ensureCopies).observe(projectsInner);
+  } else {
+    window.addEventListener('resize', ensureCopies, { passive: true });
+  }
+
+  startEngine();
+  bindScrollInput();
+  bindHoverSync();
+}
+
+// ── Boucle de rendu (rAF) ──
+let _vsLast = null;
+function engineFrame(ts) {
+  if (_vsLast == null) _vsLast = ts;
+  let dt = (ts - _vsLast) / 1000;
+  _vsLast = ts;
+  if (dt > 0.05) dt = 0.05; // borne anti-saut après un onglet en arrière-plan
+
+  if (VS.auto) {
+    // Auto-scroll idle : interpolation douce vers la cible
+    const t = Math.min((ts - VS.auto.t0) / VS.auto.dur, 1);
+    const e = t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+    VS.pos = VS.auto.from + (VS.auto.to - VS.auto.from) * e;
+    if (t >= 1) VS.auto = null;
+  } else if (!VS.dragging) {
+    // Inertie : glissement avec décroissance exponentielle (≈ feel natif)
+    VS.pos += VS.vel * dt;
+    VS.vel *= Math.exp(-3.5 * dt);
+    if (Math.abs(VS.vel) < 2) VS.vel = 0;
+  }
+
+  // Enroulement invisible : modulo sur la hauteur d'un bloc
+  const off = ((VS.pos % VS.C) + VS.C) % VS.C;
+  scrollTrack.style.transform = `translate3d(0, ${-off}px, 0)`;
+
+  updateName();
+
+  // Allège le décodage : ne garde en lecture que les vidéos proches de l'écran.
+  // Throttlé (~toutes les 4 frames) car getBoundingClientRect force un reflow.
+  if ((_vidCullTick++ & 3) === 0) updateVideoActivity();
+
+  requestAnimationFrame(engineFrame);
+}
+function startEngine() { requestAnimationFrame(engineFrame); }
+
+// ── Synchronisation de l'agrandissement au survol (desktop uniquement) ──
+// Quand la souris survole une tuile, on agrandit la MÊME tuile dans toutes les
+// copies pour que les blocs restent de hauteur égale (boucle sans saut).
+// Les effets d'overlay/titre restent pilotés par :hover sur la seule tuile visée.
+function bindHoverSync() {
+  let curIdx = null;
+  const setExpand = (idx, on) => {
+    document.querySelectorAll(`.project[data-idx="${idx}"]`)
+            .forEach(el => el.classList.toggle('expand', on));
+  };
+  scrollArea.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse') return; // pas d'agrandissement au tactile
+    const proj = e.target.closest ? e.target.closest('.project') : null;
+    const idx  = proj ? proj.dataset.idx : null;
+    if (idx === curIdx) return;
+    if (curIdx !== null) setExpand(curIdx, false);
+    curIdx = idx;
+    if (idx !== null) setExpand(idx, true);
+  });
+  scrollArea.addEventListener('pointerleave', () => {
+    if (curIdx !== null) { setExpand(curIdx, false); curIdx = null; }
+  });
+}
+
+// ── Gestion du décodage vidéo ──
+// On ne laisse jouer que les vidéos dans une bande de ±N strips autour du
+// viewport ; les autres copies sont mises en pause pour soulager le CPU/GPU.
+// Le réveil est PROACTIF (marge large) : une vidéo est relancée bien avant
+// d'entrer à l'écran, donc aucune image figée à la couture de boucle.
+let _vidCullTick = 0;
+const ACTIVE_MARGIN_STRIPS = 5; // strips gardés actifs au-delà du viewport (au repos)
+const CULL_LOOKAHEAD = 0.35;    // s d'anticipation : marge ∝ vitesse de défilement
+function updateVideoActivity() {
+  const vh     = window.innerHeight;
+  const stripH = (VS.C / N) || 200;
+  // Marge = au moins UN bloc complet de chaque côté (VS.C), pour que la copie
+  // qui va s'enrouler dans le viewport soit TOUJOURS déjà en lecture (sinon
+  // tuile vide qui « clignote » à l'apparition). On élargit encore selon la
+  // vitesse pour anticiper les lancers rapides (momentum).
+  const margin = Math.max(stripH * ACTIVE_MARGIN_STRIPS, VS.C)
+               + Math.abs(VS.vel) * CULL_LOOKAHEAD;
+  document.querySelectorAll('.project-iframe-wrap video').forEach(vid => {
+    const r = vid.getBoundingClientRect();
+    const inBand = r.bottom > -margin && r.top < vh + margin;
+    if (inBand) {
+      if (vid.paused) vid.play().catch(() => {});
+    } else if (!vid.paused && _painted.has(vid)) {
+      // On ne met en pause QUE si la vidéo a déjà affiché une image
+      // (elle conservera cette image figée au lieu de montrer le fond).
+      vid.pause();
+    }
+  });
+}
+
+// ── Saisie : tactile, molette, clavier ──
+function bindScrollInput() {
+  const MAX_V = 6000; // px/s — plafond d'inertie
+
+  // Tactile
+  // On distingue un TAP d'un SCROLL : tant que le doigt n'a pas dépassé un petit
+  // seuil, on ne défile pas et on ne fait PAS de preventDefault — sinon le clic
+  // synthétique (qui ouvre le projet) est annulé. Le défilement ne démarre qu'au
+  // franchissement du seuil. C'était la cause des taps « capricieux » sur mobile.
+  const TAP_SLOP     = 12;  // px avant de DÉMARRER le défilement
+  const TAP_MAX_MOVE = 24;  // px max de déplacement total pour rester un « tap »
+  const TAP_MAX_TIME = 350; // ms max pour un « tap »
+  let startX = 0, startY = 0, startTime = 0, lastY = 0, lastT = 0, vy = 0, moving = false;
+
+  scrollArea.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    startX = t.clientX; startY = lastY = t.clientY;
+    startTime = lastT = performance.now(); vy = 0; moving = false;
+    VS.vel = 0; VS.auto = null;
+    resetIdle();
+  }, { passive: true });
+
+  scrollArea.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    const y = t.clientY, now = performance.now();
+
+    if (!moving) {
+      // Sous le seuil : on ne défile pas encore (ça pourrait être un tap)
+      if (Math.hypot(t.clientX - startX, y - startY) < TAP_SLOP) return;
+      moving = true; VS.dragging = true;
+      lastY = y; lastT = now;          // repart d'ici pour éviter un saut
+    }
+
+    const dy = lastY - y;              // doigt vers le haut => contenu descend
+    VS.pos += dy;
+    const dt = (now - lastT) / 1000;
+    if (dt > 0) { vy = dy / dt; VS.vel = vy; } // vitesse live (culling prédictif)
+    lastY = y; lastT = now;
+    if (e.cancelable) e.preventDefault(); // bloque le scroll natif pendant le drag
+  }, { passive: false });
+
+  const endTouch = (e) => {
+    const t    = e.changedTouches && e.changedTouches[0];
+    const dist = t ? Math.hypot(t.clientX - startX, t.clientY - startY) : 999;
+    const dur  = performance.now() - startTime;
+
+    // TAP = geste bref et peu déplacé → on ouvre le projet sous le doigt.
+    // Détection tolérante (durée + distance) plutôt qu'un seuil de mouvement
+    // strict : un pouce « bouge » toujours un peu, d'où les taps ratés avant.
+    // On n'utilise PAS le clic synthétique (peu fiable avec le moteur de
+    // transform) et on le supprime pour éviter une double ouverture.
+    if (t && dist < TAP_MAX_MOVE && dur < TAP_MAX_TIME) {
+      const el   = document.elementFromPoint(t.clientX, t.clientY);
+      const proj = el && el.closest ? el.closest('.project') : null;
+      if (proj && proj.dataset.idx != null) {
+        _lastTapOpen = Date.now();
+        if (e.cancelable) e.preventDefault();
+        openProject(parseInt(proj.dataset.idx));
+      }
+    } else if (moving) {
+      // Sinon, si ça a défilé → on lance l'inertie
+      VS.vel = Math.max(-MAX_V, Math.min(MAX_V, vy));
+    }
+    VS.dragging = false;
+    moving = false;
+  };
+  scrollArea.addEventListener('touchend',    endTouch, { passive: false });
+  scrollArea.addEventListener('touchcancel', () => { VS.dragging = false; moving = false; }, { passive: true });
+
+  // Molette / trackpad
+  // Écouté sur WINDOW (pas sur #scroll-area) : Safari ne délivrait pas
+  // l'événement wheel de façon fiable à un conteneur en overflow:hidden, d'où
+  // « le scroll physique ne fait rien » sur macOS. Au niveau window, la
+  // livraison et le preventDefault sont fiables sur tous les navigateurs.
+  // On n'applique PAS le delta directement à la position : la molette souris
+  // arrive par paliers (~100px) et ferait sauter la page ET le texte MAHÉ.
+  // On l'injecte comme impulsion de vitesse : le moteur lisse le mouvement.
+  window.addEventListener('wheel', (e) => {
+    if (pvView.classList.contains('open')) return; // laisse la vue projet tranquille
+    e.preventDefault();
+    VS.auto = null;
+    let d = e.deltaY;
+    if (e.deltaMode === 1) d *= 16;                 // lignes → px
+    else if (e.deltaMode === 2) d *= window.innerHeight; // pages → px
+    VS.vel = Math.max(-MAX_V, Math.min(MAX_V, VS.vel + d * 4));
+    resetIdle();
+  }, { passive: false });
+
+  // Clavier
+  window.addEventListener('keydown', (e) => {
+    const page = window.innerHeight * 0.9;
+    let handled = true;
+    switch (e.key) {
+      case 'ArrowDown': VS.vel = 1400; break;
+      case 'ArrowUp':   VS.vel = -1400; break;
+      case 'PageDown': case ' ': VS.pos += page; break;
+      case 'PageUp':   VS.pos -= page; break;
+      default: handled = false;
+    }
+    if (handled) { VS.auto = null; resetIdle(); if (e.key === ' ') e.preventDefault(); }
+  });
+}
+
+// Démarre toutes les vidéos et maintient la lecture en continu.
+// On n'utilise pas de pause hors-viewport : les MP4 locaux sont déjà bufferisés
+// et la pause asynchrone de l'IntersectionObserver causait un gel sur les clones.
+function observeVideos() {
+  function playAll() {
+    document.querySelectorAll('.project-iframe-wrap video').forEach(vid => {
+      if (vid.paused) vid.play().catch(() => {});
+    });
+  }
+
+  playAll();
+  // Relance après création des clones
+  setTimeout(playAll, 500);
+}
+
+// ── Ouverture via clic (souris) ──
+// Sur tactile, l'ouverture est gérée directement dans touchend (clic synthétique
+// peu fiable avec le moteur de transform). Ce garde évite une double ouverture
+// si un clic synthétique survient juste après le tap tactile.
+let _lastTapOpen = 0;
+function clickOpen(idx) {
+  if (Date.now() - _lastTapOpen < 700) return; // déjà ouvert par le tap tactile
+  openProject(idx);
+}
+
+// ── Ouvrir projet ──
+function openProject(idx) {
+  const p = projects[idx];
+  pvTitle.textContent = p.title;
+  if (p.real) pvMeta.innerHTML = `Réal. ${p.real}<br>${p.year}`;
+  else pvMeta.textContent = p.year;
+  pvIframe.src = `https://www.youtube.com/embed/${p.youtubeId}?autoplay=1&rel=0&modestbranding=1`;
+
+  pvNav.innerHTML = '';
+  if (idx > 0) {
+    const btn = document.createElement('button');
+    btn.className = 'pv-nav-btn prev';
+    btn.textContent = projects[idx - 1].title;
+    btn.addEventListener('click', () => openProject(idx - 1));
+    pvNav.appendChild(btn);
+  }
+  if (idx < N - 1) {
+    const btn = document.createElement('button');
+    btn.className = 'pv-nav-btn next';
+    btn.textContent = projects[idx + 1].title;
+    btn.addEventListener('click', () => openProject(idx + 1));
+    pvNav.appendChild(btn);
+  }
+
+  pvView.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  resetIdle();
+}
+
+// ── Fermer projet ──
+function closeProject() {
+  pvView.classList.remove('open');
+  pvIframe.src = '';
+  document.body.style.overflow = '';
+}
+pvBack.addEventListener('click', closeProject);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeProject(); });
+
+// ── Cursor ──
+document.addEventListener('mousemove', e => {
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top  = e.clientY + 'px';
+});
+
+// ── Nom flottant — scroll inversé + boucle infinie ──
+// VITESSE_NOM : 1 = normal, 2 = double, 0.5 = moitié
+const VITESSE_NOM = 1.8;
+const nameSvg = document.getElementById('name-svg');
+
+// Crée les deux groupes SVG (pour la boucle infinie de scroll)
+function initNameSVG() {
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  function makeGroup() {
+    const g = document.createElementNS(svgNS, 'g');
+
+    const base = document.createElementNS(svgNS, 'text');
+    base.setAttribute('dominant-baseline', 'middle');
+    base.setAttribute('text-anchor', 'middle');
+    base.setAttribute('x', '50%');
+    base.setAttribute('y', '50%');
+    base.setAttribute('class', 'name-svg-base');
+    base.textContent = 'MAHÉ';
+
+    const stroke = document.createElementNS(svgNS, 'text');
+    stroke.setAttribute('dominant-baseline', 'middle');
+    stroke.setAttribute('text-anchor', 'middle');
+    stroke.setAttribute('x', '50%');
+    stroke.setAttribute('y', '50%');
+    stroke.setAttribute('class', 'name-svg-stroke');
+    stroke.textContent = 'MAHÉ';
+
+    const light = document.createElementNS(svgNS, 'text');
+    light.setAttribute('dominant-baseline', 'middle');
+    light.setAttribute('text-anchor', 'middle');
+    light.setAttribute('x', '50%');
+    light.setAttribute('y', '50%');
+    light.setAttribute('class', 'name-svg-light');
+    light.setAttribute('filter', 'url(#glow)');
+    light.textContent = 'MAHÉ';
+
+    g.appendChild(base);
+    g.appendChild(stroke);
+    g.appendChild(light);
+    return g;
+  }
+
+  nameSvg._g1 = makeGroup();
+  nameSvg._g2 = makeGroup();
+  nameSvg.appendChild(nameSvg._g1);
+  nameSvg.appendChild(nameSvg._g2);
+}
+
+initNameSVG();
+
+function updateName() {
+  const scrollY = (typeof VS !== 'undefined') ? VS.pos : 0;
+  const viewH   = window.innerHeight;
+  const cycle   = ((scrollY * VITESSE_NOM) % viewH + viewH) % viewH;
+  if (nameSvg._g1) {
+    nameSvg._g1.setAttribute('transform', `translate(0, ${cycle})`);
+    nameSvg._g2.setAttribute('transform', `translate(0, ${cycle - viewH})`);
+  }
+}
+updateName();
+
+// ── Animation lumière — UN SEUL tour rapide, puis stop ──
+// La lumière trace les lettres une fois (~2.5s) puis disparaît. Démarrée par
+// startLight() une fois les tuiles apparues (voir hideLoading).
+const PERIM        = 2000;  // périmètre estimé des lettres MAHÉ
+const SPEED_FAST   = 800;   // px/s — vitesse du tour unique
+
+let lightOffset   = 0;
+let firstTourDone = false;
+let lastTs        = null;
+
+function animateLight(ts) {
+  if (firstTourDone) return;        // un seul tour, pas de boucle lente
+
+  if (!lastTs) lastTs = ts;
+  const dt = (ts - lastTs) / 1000;
+  lastTs = ts;
+
+  lightOffset += SPEED_FAST * dt;
+
+  if (lightOffset >= PERIM) {
+    // Tour terminé → on cache la lumière proprement et on arrête
+    firstTourDone = true;
+    document.querySelectorAll('.name-svg-light').forEach(el => { el.style.opacity = '0'; });
+    return;
+  }
+
+  document.querySelectorAll('.name-svg-light').forEach(el => {
+    el.style.strokeDashoffset = -lightOffset;
+  });
+
+  requestAnimationFrame(animateLight);
+}
+
+// Démarre l'animation lumineuse une seule fois (appelée après l'apparition
+// des tuiles, depuis hideLoading).
+let _lightStarted = false;
+function startLight() {
+  if (_lightStarted) return;
+  _lightStarted = true;
+  requestAnimationFrame(animateLight);
+}
+
+// ══════════════════════════════════════════════
+// ── EFFETS IDLE ──
+// ══════════════════════════════════════════════
+let lastInteraction = Date.now();
+let idleAutoScroll  = null;
+let idleHighlight   = null;
+const IDLE_DELAY    = 10000;
+
+function resetIdle() {
+  lastInteraction = Date.now();
+  if (idleAutoScroll) { clearInterval(idleAutoScroll); idleAutoScroll = null; }
+  if (idleHighlight)  { clearTimeout(idleHighlight);   idleHighlight  = null; }
+  if (typeof VS !== 'undefined') VS.auto = null; // stoppe l'auto-scroll en cours
+  document.querySelectorAll('.project.highlighted').forEach(s => s.classList.remove('highlighted'));
+}
+document.addEventListener('mousemove',   resetIdle, { passive: true });
+document.addEventListener('click',      resetIdle, { passive: true });
+document.addEventListener('touchstart', resetIdle, { passive: true });
+
+function startIdleEffects() {
+  setInterval(() => {
+    if (Date.now() - lastInteraction < IDLE_DELAY) return;
+    if (!idleAutoScroll) launchAutoScroll();
+    if (!idleHighlight)  scheduleNextHighlight();
+  }, 1000);
+}
+
+// Auto-scroll idle : descend de 2 strips toutes les 12s via le moteur virtuel
+function launchAutoScroll() {
+  const doScroll = () => {
+    const stripH = projectsInner.offsetHeight / N;
+    VS.auto = { from: VS.pos, to: VS.pos + stripH * 2, dur: 1400, t0: performance.now() };
+  };
+  idleAutoScroll = setInterval(doScroll, 12000);
+}
+
+// Highlight tournant : illumine un strip toutes les 2.8s
+let highlightIdx = 0;
+function scheduleNextHighlight() {
+  idleHighlight = setTimeout(() => {
+    if (Date.now() - lastInteraction < IDLE_DELAY) return;
+    document.querySelectorAll('.project.highlighted').forEach(s => s.classList.remove('highlighted'));
+    const strips = projectsInner.querySelectorAll('.project');
+    if (strips[highlightIdx]) strips[highlightIdx].classList.add('highlighted');
+    highlightIdx = (highlightIdx + 1) % N;
+    scheduleNextHighlight();
+  }, 2800);
+}
+</script>
+</body>
+</html>
 
